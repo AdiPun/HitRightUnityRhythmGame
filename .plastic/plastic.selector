@@ -1,0 +1,4 @@
+repository "SyncGameToAudio/SyncGameToAudio@5773324959309@cloud"
+  path "/"
+    br "/main"
+    co "/main"
