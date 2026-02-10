@@ -68,9 +68,3 @@ public enum InputLane
     Lane4
 }
 
-[Serializable]
-public class RequiredGoal
-{
-    public int beatInBar;
-    public InputLane lane;
-}

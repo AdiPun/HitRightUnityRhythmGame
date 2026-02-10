@@ -8,23 +8,28 @@ public class Composer : MonoBehaviour
     [SerializeField] private List<RequiredGoal> m_goals = new();
     [SerializeField] private MusicPlayer m_musicPlayer;
     [SerializeField] private Metronome m_metronome;
+    [SerializeField] private Judge m_judge;
     [SerializeField] private UnityEvent<RequiredGoal> m_sendNextGoalEvent;
 
 
     void Start()
     {
         CreateLevelChart();
-        GetNextRequiredGoal();
     }
-
-    public void GetNextRequiredGoal() // Listen to Metronome's beat event and return the goal for the next beat
+    void Update()
     {
-        // Might be an off by one error here, need to check
-        int nextBeat = m_metronome.GetElapsedBeats();
+        float nowMs = m_musicPlayer.GetElapsedTimeInMs();
+        float beatMs = m_musicPlayer.GetBeatDurationMs();
 
-        if (nextBeat < m_goals.Count)
+        if (m_goals.Count == 0) return;
+
+        RequiredGoal next = m_goals[0];
+        float targetMs = next.absoluteBeatIndex * beatMs;
+
+        if (nowMs >= targetMs - m_judge.GetMarginMs())
         {
-            m_sendNextGoalEvent.Invoke(m_goals[nextBeat]); // Send goal to Judge
+            m_sendNextGoalEvent.Invoke(next);
+            m_goals.RemoveAt(0);
         }
     }
 
@@ -40,18 +45,20 @@ public class Composer : MonoBehaviour
 
         for (int i = 0; i < totalBeats; i++)
         {
-            int beatInBar = (i % 4) + 1;
-
             RequiredGoal goal = new RequiredGoal
             {
-                beatInBar = beatInBar,
+                absoluteBeatIndex = i,
                 lane = (InputLane)2
             };
 
             m_goals.Add(goal);
         }
     }
-
-
 }
 
+[Serializable]
+public class RequiredGoal
+{
+    public int absoluteBeatIndex;
+    public InputLane lane;
+}

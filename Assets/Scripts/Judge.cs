@@ -7,16 +7,17 @@ public class Judge : MonoBehaviour
 {
     [SerializeField] private Metronome m_metronome;
     [SerializeField] private PlayerInput m_playerInput;
+    [SerializeField] private Composer m_composer;
+    [SerializeField] private MusicPlayer m_musicPlayer;
+
     [SerializeField] private UnityEvent<InputOutcome> m_judgeOutcomeEvent;
     private RequiredGoal m_currentGoal = new RequiredGoal();
 
-    [SerializeField] private MusicPlayer m_musicPlayer;
 
     [Header("Timing Windows (ms)")]
-    [SerializeField] private float m_perfectMs = 30f;
-    [SerializeField] private float m_hitMs = 60f;
+    [SerializeField] private float m_perfectMs = 50f;
+    [SerializeField] private float m_hitMs = 80f;
     [SerializeField] private float m_marginMs = 100f;
-
 
     private bool m_goalHit;
 
@@ -30,11 +31,13 @@ public class Judge : MonoBehaviour
         CheckInputToNextGoal();
     }
 
-    public void SetCurrentGoal(RequiredGoal goal) // Listen to Composer's GetNextRequiredGoal event and set the current goal
+    public void SetCurrentGoal(RequiredGoal goal)
     {
         m_currentGoal = goal;
         m_goalHit = false;
+        Debug.Log($"NEW TARGET BEAT: {goal.absoluteBeatIndex}");
     }
+
 
     private void CheckInputToNextGoal() // Listen to player input
     {
@@ -69,52 +72,52 @@ public class Judge : MonoBehaviour
         }
     }
 
-    private void CheckMetronomeTiming() // Check if metronome window is open
+    private void CheckMetronomeTiming()
     {
-        if (m_metronome.GetActiveBeat() != m_currentGoal.beatInBar)
-        {
-            m_judgeOutcomeEvent.Invoke(InputOutcome.Miss); // Send outcome to GameManager
-            Debug.Log("Correct lane: " + m_currentGoal.lane + " but incorrect beat: " + m_metronome.GetActiveBeat() + " goal beat: " + m_currentGoal.beatInBar);
-            return;
-        }
+        if (m_goalHit) return;
 
         m_goalHit = true;
-        Debug.Log("Correct lane: " + m_currentGoal.lane + " and correct beat: " + m_metronome.GetActiveBeat() + " goal beat: " + m_currentGoal.beatInBar);
-        Debug.Log("Outcome: " + GetInputTimingOutcome());
-        m_judgeOutcomeEvent.Invoke(GetInputTimingOutcome()); // Send outcome to GameManager
+
+        InputOutcome outcome = GetInputTimingOutcome();
+        m_judgeOutcomeEvent.Invoke(outcome);
+        Debug.Log("Outcome: " + outcome);
     }
+
 
     public void CheckForMiss(int lastBeat) // Listens to Metronome's exit beat event to know when to miss
     {
         Debug.Assert(m_currentGoal != null, "current goal is not assigned!");
         Debug.Assert(m_metronome != null, "metronome is not assigned!");
 
-        if (!m_goalHit && m_metronome.GetActiveBeat() == m_currentGoal.beatInBar)
+        float nowMs = m_musicPlayer.GetElapsedTimeInMs();
+        float targetMs = m_currentGoal.absoluteBeatIndex * m_musicPlayer.GetBeatDurationMs();
+
+        if (!m_goalHit && nowMs > targetMs + m_marginMs)
         {
-            m_judgeOutcomeEvent.Invoke(InputOutcome.Miss); // Send outcome to GameManager
-            Debug.Log("Missed beat: " + m_currentGoal.beatInBar);
+            m_goalHit = true;
+            m_judgeOutcomeEvent.Invoke(InputOutcome.Miss);
         }
+
     }
 
     // Compares current time in beats to last beat and returns a Perfect, Hit, Early or Late based on how close it was to the beat
-    public InputOutcome GetInputTimingOutcome()
+    private InputOutcome GetInputTimingOutcome()
     {
-        float inputBeat = m_musicPlayer.GetElapsedTimeInBeats();
-        float beatCenter = m_metronome.GetElapsedBeats() + 1f;
+        float nowMs = m_musicPlayer.GetElapsedTimeInMs();
+        float beatMs = m_musicPlayer.GetBeatDurationMs();
 
-        float deltaBeats = inputBeat - beatCenter;
-        float deltaMs = deltaBeats * m_musicPlayer.GetBeatDurationMs();
-        float absDeltaMs = Mathf.Abs(deltaMs);
+        float targetMs = m_currentGoal.absoluteBeatIndex * beatMs;
+        float deltaMs = nowMs - targetMs;
 
-        Debug.Log("Delta: " + absDeltaMs);
+        Debug.Log($"Now: {nowMs:0} | Target: {targetMs:0} | Delta: {deltaMs:0}");
 
-        if (absDeltaMs <= m_perfectMs)
+        if (Mathf.Abs(deltaMs) <= m_perfectMs)
             return InputOutcome.Perfect;
 
-        if (absDeltaMs <= m_hitMs)
+        if (Mathf.Abs(deltaMs) <= m_hitMs)
             return InputOutcome.Hit;
 
-        if (absDeltaMs <= m_marginMs)
+        if (Mathf.Abs(deltaMs) <= m_marginMs)
             return deltaMs < 0 ? InputOutcome.Early : InputOutcome.Late;
 
         return InputOutcome.Miss;
@@ -122,4 +125,6 @@ public class Judge : MonoBehaviour
 
     // --- Getters ---
     public float GetMarginMs() => m_marginMs;
+    public int GetCurrentTargetBeat() => m_currentGoal.absoluteBeatIndex;
+
 }
