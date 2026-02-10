@@ -1,3 +1,4 @@
+using NUnit.Framework;
 using UnityEditor.ShaderGraph.Internal;
 using UnityEngine;
 using UnityEngine.Events;
@@ -7,77 +8,57 @@ public class Metronome : MonoBehaviour
     [SerializeField] private MusicPlayer m_musicPlayer;
 
     [Header("Timing Windows (ms)")]
-    [SerializeField] private float m_marginMs = 100f;
-    [SerializeField] private float m_lateTimingMs = 60f;
-    [SerializeField] private float m_perfectTimingMs = 20f;
+    [SerializeField] private float m_margin = 0.1f;
+    [SerializeField] private float m_lateTiming = 0.06f;
+    [SerializeField] private float m_perfectTiming = 0.02f;
 
     [Header("Events")]
     [SerializeField] private UnityEvent<int> m_beatEvent;
+    [SerializeField] private UnityEvent<int> m_enterBeatEvent;
     [SerializeField] private UnityEvent<int> m_exitBeatEvent;
 
-    private float m_beatDurationMs;
-
-    private int m_elapsedBeats;
-    private int m_lastInterval;
-
-    private int m_lastBeat;
+    private int m_lastBeat = 0;
     private int m_activeBeat = -1;
 
-    private float m_activeBeatStartPositionMs;
-    private float m_activeBeatEndPositionMs;
-
-    private bool m_wasInActiveBeat;
+    private float m_activeBeatStartPosition;
+    private float m_activeBeatEndPosition;
+    private bool m_hasBeenInActiveBeat = false;
 
     void Start()
     {
-        m_beatDurationMs = m_musicPlayer.GetBeatDurationMs();
-        m_elapsedBeats = 0;
-        m_lastInterval = 0;
-
         UpdateActiveBeatWindow();
     }
 
     void Update()
     {
-        float beatTime = m_musicPlayer.GetElapsedTimeInBeats();
+        CheckForNewBeat();
 
-        CheckForNewBeat(beatTime);
+        UpdateActiveBeatWindow();
+
         HandleActiveBeat();
-
     }
 
     // --- Beat Progression ---
-    public void CheckForNewBeat(float beatTime)
+    public void CheckForNewBeat()
     {
-        // This is rounding the interval down to an int and once it changes, we know we've moved to the next beat
-        // if we have, we trigger an event
-        int interval = Mathf.FloorToInt(beatTime);
+        float elapsedBeats = m_musicPlayer.GetElapsedTimeInBeats();
+        int beatIndex = Mathf.FloorToInt(elapsedBeats);
 
-        if (interval != m_lastInterval)
+        if (beatIndex != m_lastBeat)
         {
-            // Set lastInterval to the floored int
-            m_lastInterval = interval;
-            // Increment beat by one
-            m_elapsedBeats++;
-
-            // Last beat is modulo 4
-            m_lastBeat = (m_elapsedBeats % 4) + 1;
-
-            // Set error margins
-            UpdateActiveBeatWindow();
-            m_beatEvent.Invoke(m_elapsedBeats); // We're using event triggers so that we can easily drag other things in the inspector to be triggered by this beat script
-            Debug.Log("Last Beat: " + m_lastBeat);
-            Debug.Log("Active Beat: " + m_activeBeat);
+            m_lastBeat = beatIndex;
+            m_beatEvent.Invoke((beatIndex % 4) + 1);
         }
     }
 
     private void UpdateActiveBeatWindow()
     {
-        float beatCenterMs = m_elapsedBeats * m_beatDurationMs;
+        float beatCenter = m_lastBeat;
 
-        m_activeBeatStartPositionMs = beatCenterMs - m_marginMs;
-        m_activeBeatEndPositionMs = beatCenterMs + m_marginMs;
+        m_activeBeatStartPosition = beatCenter - m_margin;
+        m_activeBeatEndPosition = beatCenter + m_margin;
     }
+
 
 
     // --- Active Beat ---
@@ -85,56 +66,103 @@ public class Metronome : MonoBehaviour
     // If the audio's position is within the margins, m_activeBeat is set to the m_lastBeat otherwise it's -1
     public void HandleActiveBeat()
     {
-        float timeMs = m_musicPlayer.GetElapsedTimeInMs();
+        float timeBeats = m_musicPlayer.GetElapsedTimeInBeats();
 
-        bool isInActiveBeat = timeMs >= m_activeBeatStartPositionMs && timeMs <= m_activeBeatEndPositionMs;
+        // Within active beat window
+        bool isInActiveBeat =
+            timeBeats >= m_activeBeatStartPosition &&
+            timeBeats <= m_activeBeatEndPosition;
 
-        if (isInActiveBeat && !m_wasInActiveBeat) // If we just entered a beat
+        // Enter active beat and fire once
+        if (isInActiveBeat && !m_hasBeenInActiveBeat)
         {
-            Debug.Log("Entering Beat: " + m_lastBeat);
             m_activeBeat = m_lastBeat;
+            m_enterBeatEvent.Invoke(m_activeBeat);
+            m_hasBeenInActiveBeat = true;
+            Debug.Log("Entered active beat: " + m_activeBeat);
         }
-
-        if (m_wasInActiveBeat && !isInActiveBeat) // If we exit the beat we were in
+        // Exit active beat and fire once
+        else if (!isInActiveBeat && m_hasBeenInActiveBeat)
         {
-            Debug.Log("Exiting Beat" + m_activeBeat);
+            m_exitBeatEvent.Invoke(m_activeBeat);
             m_activeBeat = -1;
-            m_exitBeatEvent.Invoke(m_lastBeat); // Judge listens to this to know when to miss
+            m_hasBeenInActiveBeat = false;
+            Debug.Log("Exited active beat");
         }
-
-        m_wasInActiveBeat = isInActiveBeat; // Set this to false if we're not in active beat
     }
 
-    // --- Getters ---
-    public int GetElapsedBeats() => m_elapsedBeats;
 
+    // --- Getters ---
     public int GetActiveBeat() => m_activeBeat;
 
     public InputOutcome GetInputTimingOutcome()
     {
-        float inputTimeMs = m_musicPlayer.GetElapsedTimeInMs();
+        float inputBeat = m_musicPlayer.GetElapsedTimeInBeats();
+        float beatCenter = m_lastBeat;
 
-        float beatCenterMs = (m_activeBeatStartPositionMs + m_activeBeatEndPositionMs) * 0.5f;
+        float delta = inputBeat - beatCenter;
+        float absDelta = Mathf.Abs(delta);
 
-        float deltaMs = inputTimeMs - beatCenterMs;
-        float absDeltaMs = Mathf.Abs(deltaMs); // Judging based on how large the difference is between the input time and the beat center
-
-        if (absDeltaMs <= m_perfectTimingMs)
-        {
+        if (absDelta <= m_perfectTiming)
             return InputOutcome.Perfect;
-        }
 
-        if (absDeltaMs <= m_lateTimingMs)
-        {
+        if (absDelta <= m_lateTiming)
             return InputOutcome.Hit;
-        }
 
-        if (absDeltaMs <= m_marginMs)
-        {
-            return deltaMs < 0 ? InputOutcome.Early : InputOutcome.Late;
-        }
+        if (absDelta <= m_margin)
+            return delta < 0 ? InputOutcome.Early : InputOutcome.Late;
 
         return InputOutcome.Miss;
     }
+
+
+    void OnGUI()
+    {
+        const float barWidth = 600f;
+        const float barHeight = 20f;
+        const float x = 20f;
+        const float y = 20f;
+
+        float timeBeats = m_musicPlayer.GetElapsedTimeInBeats();
+
+        float viewStart = m_lastBeat - 1f;
+        float viewEnd = m_lastBeat + 1f;
+
+        float t = Mathf.InverseLerp(viewStart, viewEnd, timeBeats);
+
+        // Background
+        GUI.color = Color.gray;
+        GUI.Box(new Rect(x, y, barWidth, barHeight), "");
+
+        // Active beat window
+        GUI.color = new Color(0.2f, 0.6f, 1f, 0.6f);
+        GUI.Box(
+            new Rect(
+                x,
+                y,
+                barWidth,
+                barHeight
+            ),
+            ""
+        );
+
+        // Current time cursor
+        GUI.color = Color.red;
+        GUI.Box(
+            new Rect(
+                x + t * barWidth - 2f,
+                y - 5f,
+                4f,
+                barHeight + 10f
+            ),
+            ""
+        );
+
+        GUI.color = Color.white;
+        GUI.Label(new Rect(x, y + 30, 800, 20),
+            $"Time: {timeBeats:0} beats | Beat: {m_lastBeat} | Active: {m_activeBeat}"
+        );
+    }
+
 
 }

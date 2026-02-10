@@ -4,7 +4,7 @@ public class MusicPlayer : MonoBehaviour
 {
     [SerializeField] private AudioSource _audioSource;
 
-    [SerializeField] private float _bpm;
+    [SerializeField] private float _bpm = 120f;
 
     [SerializeField] private float _noteLength = 1;
 
@@ -29,11 +29,6 @@ public class MusicPlayer : MonoBehaviour
         // .GetBeatDurationSeconds will get the length of a beat in seconds at the BPM
         float elapsedTimeInBeats = _audioSource.timeSamples / (_audioSource.clip.frequency * GetBeatDurationSeconds());
         return elapsedTimeInBeats;
-    }
-
-    public float GetElapsedTimeInMs()
-    {
-        return (_audioSource.timeSamples * 1000f) / _audioSource.clip.frequency;
     }
 
     // Gets the length of the current beat we're tracking in seconds

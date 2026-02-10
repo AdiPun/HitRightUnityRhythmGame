@@ -20,12 +20,12 @@ public class Composer : MonoBehaviour
     public void GetNextRequiredGoal() // Listen to Metronome's beat event and return the goal for the next beat
     {
         // Might be an off by one error here, need to check
-        int nextBeat = m_metronome.GetElapsedBeats();
+        // int nextBeat = m_metronome.GetElapsedBeats();
 
-        if (nextBeat < m_goals.Count)
-        {
-            m_sendNextGoalEvent.Invoke(m_goals[nextBeat]); // Send goal to Judge
-        }
+        // if (nextBeat < m_goals.Count)
+        // {
+        //     m_sendNextGoalEvent.Invoke(m_goals[nextBeat]); // Send goal to Judge
+        // }
     }
 
     public void CreateLevelChart()
