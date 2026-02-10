@@ -838,9 +838,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ca17690e85ce7054cb924fe98c544a54, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
-  m_audioSource: {fileID: 801132649}
-  m_bpm: 120
-  m_noteLength: 1
+  _audioSource: {fileID: 801132649}
+  _bpm: 120
+  _noteLength: 1
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -1195,9 +1195,9 @@ MonoBehaviour:
           m_BoolArgument: 0
         m_CallState: 2
   m_musicPlayer: {fileID: 801132651}
-  m_perfectMs: 30
-  m_hitMs: 60
-  m_marginMs: 100
+  m_margin: 0.8
+  m_lateTiming: 0.75
+  m_perfectTiming: 0.7
 --- !u!4 &1227402369
 Transform:
   m_ObjectHideFlags: 0
@@ -1840,9 +1840,6 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
-  m_lastBeat: 0
-  m_activeBeat: -1
-  m_hasBeenInActiveBeat: 0
 --- !u!4 &1825275487
 Transform:
   m_ObjectHideFlags: 0

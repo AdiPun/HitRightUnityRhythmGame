@@ -6,23 +6,21 @@ using UnityEngine.Events;
 public class Metronome : MonoBehaviour
 {
     [SerializeField] private MusicPlayer m_musicPlayer;
-
-    [Header("Timing Windows (ms)")]
-    [SerializeField] private float m_margin = 0.1f;
-    [SerializeField] private float m_lateTiming = 0.06f;
-    [SerializeField] private float m_perfectTiming = 0.02f;
+    [SerializeField] private Judge m_judge;
 
     [Header("Events")]
     [SerializeField] private UnityEvent<int> m_beatEvent;
     [SerializeField] private UnityEvent<int> m_enterBeatEvent;
     [SerializeField] private UnityEvent<int> m_exitBeatEvent;
 
-    private int m_lastBeat = 0;
-    private int m_activeBeat = -1;
+    [SerializeField] private int m_lastBeat = 0;
+    [SerializeField] private int m_activeBeat = -1;
 
-    private float m_activeBeatStartPosition;
-    private float m_activeBeatEndPosition;
-    private bool m_hasBeenInActiveBeat = false;
+    private float m_nextBeatBeat;
+    private float m_nextBeatStartBeat;
+    private float m_nextBeatEndBeat;
+
+    [SerializeField] private bool m_hasBeenInActiveBeat = false;
 
     void Start()
     {
@@ -32,9 +30,6 @@ public class Metronome : MonoBehaviour
     void Update()
     {
         CheckForNewBeat();
-
-        UpdateActiveBeatWindow();
-
         HandleActiveBeat();
     }
 
@@ -47,18 +42,21 @@ public class Metronome : MonoBehaviour
         if (beatIndex != m_lastBeat)
         {
             m_lastBeat = beatIndex;
-            m_beatEvent.Invoke((beatIndex % 4) + 1);
+            UpdateActiveBeatWindow();
+
+            m_beatEvent.Invoke(m_lastBeat);
         }
     }
 
     private void UpdateActiveBeatWindow()
     {
-        float beatCenter = m_lastBeat;
+        m_nextBeatBeat = m_lastBeat + 1f;
 
-        m_activeBeatStartPosition = beatCenter - m_margin;
-        m_activeBeatEndPosition = beatCenter + m_margin;
+        float marginBeats = m_judge.GetMarginMs() / m_musicPlayer.GetBeatDurationMs();
+
+        m_nextBeatStartBeat = m_nextBeatBeat - marginBeats;
+        m_nextBeatEndBeat = m_nextBeatBeat + marginBeats;
     }
-
 
 
     // --- Active Beat ---
@@ -68,15 +66,14 @@ public class Metronome : MonoBehaviour
     {
         float timeBeats = m_musicPlayer.GetElapsedTimeInBeats();
 
-        // Within active beat window
         bool isInActiveBeat =
-            timeBeats >= m_activeBeatStartPosition &&
-            timeBeats <= m_activeBeatEndPosition;
+            timeBeats >= m_nextBeatStartBeat &&
+            timeBeats <= m_nextBeatEndBeat;
 
         // Enter active beat and fire once
         if (isInActiveBeat && !m_hasBeenInActiveBeat)
         {
-            m_activeBeat = m_lastBeat;
+            m_activeBeat = ((m_lastBeat) % 4) + 1;
             m_enterBeatEvent.Invoke(m_activeBeat);
             m_hasBeenInActiveBeat = true;
             Debug.Log("Entered active beat: " + m_activeBeat);
@@ -87,34 +84,12 @@ public class Metronome : MonoBehaviour
             m_exitBeatEvent.Invoke(m_activeBeat);
             m_activeBeat = -1;
             m_hasBeenInActiveBeat = false;
-            Debug.Log("Exited active beat");
         }
     }
 
-
     // --- Getters ---
     public int GetActiveBeat() => m_activeBeat;
-
-    public InputOutcome GetInputTimingOutcome()
-    {
-        float inputBeat = m_musicPlayer.GetElapsedTimeInBeats();
-        float beatCenter = m_lastBeat;
-
-        float delta = inputBeat - beatCenter;
-        float absDelta = Mathf.Abs(delta);
-
-        if (absDelta <= m_perfectTiming)
-            return InputOutcome.Perfect;
-
-        if (absDelta <= m_lateTiming)
-            return InputOutcome.Hit;
-
-        if (absDelta <= m_margin)
-            return delta < 0 ? InputOutcome.Early : InputOutcome.Late;
-
-        return InputOutcome.Miss;
-    }
-
+    public int GetElapsedBeats() => m_lastBeat;
 
     void OnGUI()
     {
@@ -123,24 +98,39 @@ public class Metronome : MonoBehaviour
         const float x = 20f;
         const float y = 20f;
 
-        float timeBeats = m_musicPlayer.GetElapsedTimeInBeats();
+        float timeMs = m_musicPlayer.GetElapsedTimeInMs();
+        float beatMs = m_musicPlayer.GetBeatDurationMs();
 
-        float viewStart = m_lastBeat - 1f;
-        float viewEnd = m_lastBeat + 1f;
+        float viewCenter = (m_lastBeat + 1f) * beatMs;
+        float viewStart = viewCenter - beatMs;
+        float viewEnd = viewCenter + beatMs;
 
-        float t = Mathf.InverseLerp(viewStart, viewEnd, timeBeats);
+
+        float t = Mathf.InverseLerp(viewStart, viewEnd, timeMs);
 
         // Background
         GUI.color = Color.gray;
         GUI.Box(new Rect(x, y, barWidth, barHeight), "");
 
         // Active beat window
+        float startT = Mathf.InverseLerp(
+            viewStart,
+            viewEnd,
+            m_nextBeatStartBeat * beatMs
+        );
+
+        float endT = Mathf.InverseLerp(
+            viewStart,
+            viewEnd,
+            m_nextBeatEndBeat * beatMs
+        );
+
         GUI.color = new Color(0.2f, 0.6f, 1f, 0.6f);
         GUI.Box(
             new Rect(
-                x,
+                x + startT * barWidth,
                 y,
-                barWidth,
+                (endT - startT) * barWidth,
                 barHeight
             ),
             ""
@@ -159,8 +149,9 @@ public class Metronome : MonoBehaviour
         );
 
         GUI.color = Color.white;
-        GUI.Label(new Rect(x, y + 30, 800, 20),
-            $"Time: {timeBeats:0} beats | Beat: {m_lastBeat} | Active: {m_activeBeat}"
+        GUI.Label(
+            new Rect(x, y + 30, 800, 20),
+            $"Time: {timeMs:0} ms | Beat: {m_lastBeat} | Active: {m_activeBeat}"
         );
     }
 
