@@ -5,40 +5,35 @@ using UnityEngine.Events;
 
 public class Composer : MonoBehaviour
 {
-    [SerializeField] private List<RequiredGoal> m_goals = new();
+    public List<RequiredGoal> m_chart { get; private set; } = new();
     [SerializeField] private MusicPlayer m_musicPlayer;
     [SerializeField] private Metronome m_metronome;
     [SerializeField] private Judge m_judge;
     [SerializeField] private UnityEvent<RequiredGoal> m_sendNextGoalEvent;
+    [SerializeField] private int m_leadInBeats = 4; // 4 beats before the first note gives the player time
 
+    private int m_nextGoalIndex = 0;
 
     void Start()
     {
         CreateLevelChart();
-    }
-    void Update()
-    {
-        float nowMs = m_musicPlayer.GetElapsedTimeInMs();
-        float beatMs = m_musicPlayer.GetBeatDurationMs();
+        Reset();
 
-        if (m_goals.Count == 0) return;
-
-        RequiredGoal next = m_goals[0];
-        float targetMs = next.absoluteBeatIndex * beatMs;
-
-        if (nowMs >= targetMs - m_judge.GetMarginMs())
+        if (m_chart.Count > 0)
         {
-            m_sendNextGoalEvent.Invoke(next);
-            m_goals.RemoveAt(0);
+            m_sendNextGoalEvent?.Invoke(m_chart[0]);
         }
+    }
+
+    public void Reset()
+    {
+        m_nextGoalIndex = 0;
     }
 
     public void CreateLevelChart()
     {
-        // Clear the list
-        m_goals.Clear();
+        m_chart.Clear();
 
-        // Find the number of beats in the track
         float trackLength = m_musicPlayer.GetTrackLengthSeconds();
         float beatDuration = m_musicPlayer.GetBeatDurationSeconds();
         int totalBeats = Mathf.FloorToInt(trackLength / beatDuration);
@@ -47,11 +42,30 @@ public class Composer : MonoBehaviour
         {
             RequiredGoal goal = new RequiredGoal
             {
-                absoluteBeatIndex = i,
-                lane = (InputLane)2
+                absoluteBeatIndex = i + m_leadInBeats,
+                lane = InputLane.Lane3
             };
 
-            m_goals.Add(goal);
+            m_chart.Add(goal);
+        }
+    }
+
+
+    public RequiredGoal GetNextGoal()
+    {
+        if (m_nextGoalIndex >= m_chart.Count)
+            return null;
+
+        return m_chart[m_nextGoalIndex];
+    }
+
+    public void AdvanceGoal()
+    {
+        m_nextGoalIndex++;
+
+        if (m_nextGoalIndex < m_chart.Count)
+        {
+            m_sendNextGoalEvent?.Invoke(m_chart[m_nextGoalIndex]);
         }
     }
 }

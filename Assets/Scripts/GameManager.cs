@@ -10,6 +10,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private int m_hit;
     [SerializeField] private int m_miss;
     [SerializeField] private UnityEvent m_gameStart;
+    [SerializeField] private Composer m_composer;
 
     void Start()
     {
@@ -48,6 +49,10 @@ public class GameManager : MonoBehaviour
         }
     }
 
+    public void Reset()
+    {
+        m_composer.Reset();
+    }
 }
 
 public enum InputOutcome // These are the outcomesof the player's input
@@ -67,4 +72,3 @@ public enum InputLane
     Lane3,
     Lane4
 }
-

@@ -63,8 +63,6 @@ public class Metronome : MonoBehaviour
         m_nextBeatEndBeat = (targetMs + m_judge.GetMarginMs()) / beatMs;
     }
 
-
-
     // --- Active Beat ---
 
     // If the audio's position is within the margins, m_activeBeat is set to the m_lastBeat otherwise it's -1
