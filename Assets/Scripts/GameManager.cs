@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -7,20 +6,12 @@ public class GameManager : MonoBehaviour
     [SerializeField] private int m_combo = 0;
     [SerializeField] private int m_maxCombo = 0;
     [SerializeField] private int m_hp = 10;
-    [SerializeField] private int m_hit;
-    [SerializeField] private int m_miss;
+    [SerializeField] private int m_hit = 0;
+    [SerializeField] private int m_miss = 0;
+
     [SerializeField] private UnityEvent m_gameStart;
     [SerializeField] private Composer m_composer;
-
-    void Start()
-    {
-
-    }
-
-    void Update()
-    {
-
-    }
+    [SerializeField] private NoteSpawner m_noteSpawner;
 
     public void ResetLevel()
     {
@@ -29,33 +20,35 @@ public class GameManager : MonoBehaviour
         m_hp = 10;
         m_hit = 0;
         m_miss = 0;
+
+        m_composer.Reset();
+        m_noteSpawner.ResetSpawner();
     }
 
     public void UpdateScore(InputOutcome outcome)
     {
-        if (outcome == InputOutcome.Hit || outcome == InputOutcome.Perfect || outcome == InputOutcome.Late || outcome == InputOutcome.Early)
+        bool isHit = outcome == InputOutcome.Hit
+                  || outcome == InputOutcome.Perfect
+                  || outcome == InputOutcome.Early
+                  || outcome == InputOutcome.Late;
+
+        if (isHit)
         {
-            m_combo += 1;
-            m_hit += 1;
+            m_combo++;
+            m_hit++;
         }
         else
         {
             if (m_combo > m_maxCombo)
-            {
                 m_maxCombo = m_combo;
-            }
-            m_combo = 0;
-            m_miss += 1;
-        }
-    }
 
-    public void Reset()
-    {
-        m_composer.Reset();
+            m_combo = 0;
+            m_miss++;
+        }
     }
 }
 
-public enum InputOutcome // These are the outcomesof the player's input
+public enum InputOutcome
 {
     Miss,
     Hit,
@@ -64,7 +57,6 @@ public enum InputOutcome // These are the outcomesof the player's input
     Late
 }
 
-// Which lane, maps to input button 1,2,3 and 4
 public enum InputLane
 {
     Lane1,

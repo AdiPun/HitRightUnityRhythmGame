@@ -6,11 +6,11 @@ using UnityEngine.Events;
 public class Composer : MonoBehaviour
 {
     public List<RequiredGoal> m_chart { get; private set; } = new();
+
     [SerializeField] private MusicPlayer m_musicPlayer;
-    [SerializeField] private Metronome m_metronome;
     [SerializeField] private Judge m_judge;
     [SerializeField] private UnityEvent<RequiredGoal> m_sendNextGoalEvent;
-    [SerializeField] private int m_leadInBeats = 4; // 4 beats before the first note gives the player time
+    [SerializeField] private int m_leadInBeats = 4;
 
     private int m_nextGoalIndex = 0;
 
@@ -19,6 +19,8 @@ public class Composer : MonoBehaviour
         CreateLevelChart();
         Reset();
 
+        // Send the first goal to the Judge so it knows what to listen for.
+        // NoteSpawner handles its own spawning via Update(); do not spawn here.
         if (m_chart.Count > 0)
         {
             m_sendNextGoalEvent?.Invoke(m_chart[0]);
@@ -40,16 +42,13 @@ public class Composer : MonoBehaviour
 
         for (int i = 0; i < totalBeats; i++)
         {
-            RequiredGoal goal = new RequiredGoal
+            m_chart.Add(new RequiredGoal
             {
                 absoluteBeatIndex = i + m_leadInBeats,
                 lane = InputLane.Lane3
-            };
-
-            m_chart.Add(goal);
+            });
         }
     }
-
 
     public RequiredGoal GetNextGoal()
     {
@@ -64,9 +63,7 @@ public class Composer : MonoBehaviour
         m_nextGoalIndex++;
 
         if (m_nextGoalIndex < m_chart.Count)
-        {
             m_sendNextGoalEvent?.Invoke(m_chart[m_nextGoalIndex]);
-        }
     }
 }
 

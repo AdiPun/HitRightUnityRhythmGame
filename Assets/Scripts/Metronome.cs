@@ -1,5 +1,3 @@
-using NUnit.Framework;
-using UnityEditor.ShaderGraph.Internal;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
@@ -16,16 +14,13 @@ public class Metronome : MonoBehaviour
 
     private int m_lastBeat = 0;
     private int m_activeBeat = -1;
+    private bool m_hasBeenInActiveBeat = false;
 
-    private float m_nextBeatBeat;
     private float m_nextBeatStartBeat;
     private float m_nextBeatEndBeat;
 
-    [SerializeField] private bool m_hasBeenInActiveBeat = false;
-
     private List<InputHit> m_inputHits = new List<InputHit>();
     private const int MaxHits = 32;
-
 
     void Start()
     {
@@ -35,15 +30,13 @@ public class Metronome : MonoBehaviour
     void Update()
     {
         CheckForNewBeat();
-        HandleActiveBeat();
         UpdateActiveBeatWindow();
+        HandleActiveBeat();
     }
 
-    // --- Beat Progression ---
-    public void CheckForNewBeat()
+    private void CheckForNewBeat()
     {
-        float elapsedBeats = m_musicPlayer.GetElapsedTimeInBeats();
-        int beatIndex = Mathf.FloorToInt(elapsedBeats);
+        int beatIndex = Mathf.FloorToInt(m_musicPlayer.GetElapsedTimeInBeats());
 
         if (beatIndex != m_lastBeat)
         {
@@ -58,31 +51,23 @@ public class Metronome : MonoBehaviour
 
         float beatMs = m_musicPlayer.GetBeatDurationMs();
         float targetMs = m_judge.GetCurrentTargetBeat() * beatMs;
+        float marginMs = m_judge.GetMarginMs();
 
-        m_nextBeatStartBeat = (targetMs - m_judge.GetMarginMs()) / beatMs;
-        m_nextBeatEndBeat = (targetMs + m_judge.GetMarginMs()) / beatMs;
+        m_nextBeatStartBeat = (targetMs - marginMs) / beatMs;
+        m_nextBeatEndBeat = (targetMs + marginMs) / beatMs;
     }
 
-    // --- Active Beat ---
-
-    // If the audio's position is within the margins, m_activeBeat is set to the m_lastBeat otherwise it's -1
-    public void HandleActiveBeat()
+    private void HandleActiveBeat()
     {
         float timeBeats = m_musicPlayer.GetElapsedTimeInBeats();
+        bool isInActiveBeat = timeBeats >= m_nextBeatStartBeat && timeBeats <= m_nextBeatEndBeat;
 
-        bool isInActiveBeat =
-            timeBeats >= m_nextBeatStartBeat &&
-            timeBeats <= m_nextBeatEndBeat;
-
-        // Enter active beat and fire once
         if (isInActiveBeat && !m_hasBeenInActiveBeat)
         {
             m_activeBeat = (m_lastBeat % 4) + 1;
             m_enterBeatEvent.Invoke(m_activeBeat);
             m_hasBeenInActiveBeat = true;
-            //Debug.Log("Entered active beat: " + m_activeBeat);
         }
-        // Exit active beat and fire once
         else if (!isInActiveBeat && m_hasBeenInActiveBeat)
         {
             m_exitBeatEvent.Invoke(m_activeBeat);
@@ -103,8 +88,6 @@ public class Metronome : MonoBehaviour
             m_inputHits.RemoveAt(0);
     }
 
-
-    // --- Getters ---
     public int GetActiveBeat() => m_activeBeat;
     public int GetElapsedBeats() => m_lastBeat;
 
@@ -123,7 +106,6 @@ public class Metronome : MonoBehaviour
 
         float nowMs = m_musicPlayer.GetElapsedTimeInMs();
         float beatMs = m_musicPlayer.GetBeatDurationMs();
-
         float windowMs = beatMs * 4f;
         float viewStart = nowMs - windowMs * 0.5f;
         float viewEnd = nowMs + windowMs * 0.5f;
@@ -139,8 +121,7 @@ public class Metronome : MonoBehaviour
 
         for (int i = firstBeat; i <= lastBeat; i++)
         {
-            float beatTime = i * beatMs;
-            float beatT = Mathf.InverseLerp(viewStart, viewEnd, beatTime);
+            float beatT = Mathf.InverseLerp(viewStart, viewEnd, i * beatMs);
             float bx = x + beatT * barWidth;
             GUI.Box(new Rect(bx - 1f, y, 2f, barHeight), "");
         }
@@ -148,59 +129,30 @@ public class Metronome : MonoBehaviour
         // Active beat window
         float startT = Mathf.InverseLerp(viewStart, viewEnd, m_nextBeatStartBeat * beatMs);
         float endT = Mathf.InverseLerp(viewStart, viewEnd, m_nextBeatEndBeat * beatMs);
-
         GUI.color = new Color(0.2f, 0.6f, 1f, 0.5f);
-        GUI.Box(
-            new Rect(
-                x + startT * barWidth,
-                y,
-                (endT - startT) * barWidth,
-                barHeight
-            ),
-            ""
-        );
+        GUI.Box(new Rect(x + startT * barWidth, y, (endT - startT) * barWidth, barHeight), "");
 
         // Input hits
         foreach (var hit in m_inputHits)
         {
             float hitT = Mathf.InverseLerp(viewStart, viewEnd, hit.timeMs);
-            if (hitT < 0f || hitT > 1f)
-                continue;
+            if (hitT < 0f || hitT > 1f) continue;
 
             float hx = x + hitT * barWidth;
-
-            if (Mathf.Abs(hit.deltaMs) <= 30f)
-                GUI.color = Color.cyan;
-            else if (Mathf.Abs(hit.deltaMs) <= 60f)
-                GUI.color = Color.green;
-            else
-                GUI.color = Color.red;
+            GUI.color = Mathf.Abs(hit.deltaMs) <= 30f ? Color.cyan
+                      : Mathf.Abs(hit.deltaMs) <= 60f ? Color.green
+                      : Color.red;
 
             GUI.Box(new Rect(hx - 2f, y - 10f, 4f, barHeight + 20f), "");
-
-            GUI.Label(
-                new Rect(hx - 30f, y + barHeight + 10f, 60f, 20f),
-                $"{hit.deltaMs:+0;-0}ms"
-            );
+            GUI.Label(new Rect(hx - 30f, y + barHeight + 10f, 60f, 20f), $"{hit.deltaMs:+0;-0}ms");
         }
 
-        // Now cursor (centered)
+        // Now cursor
         GUI.color = Color.yellow;
-        GUI.Box(
-            new Rect(
-                x + barWidth * 0.5f - 2f,
-                y - 15f,
-                4f,
-                barHeight + 30f
-            ),
-            ""
-        );
+        GUI.Box(new Rect(x + barWidth * 0.5f - 2f, y - 15f, 4f, barHeight + 30f), "");
 
         GUI.color = Color.white;
-        GUI.Label(
-            new Rect(x, y + 40f, 800f, 20f),
-            $"Time: {nowMs:0} ms | Beat: {m_lastBeat} | Active: {m_activeBeat}"
-        );
+        GUI.Label(new Rect(x, y + 40f, 800f, 20f),
+            $"Time: {nowMs:0} ms | Beat: {m_lastBeat} | Active: {m_activeBeat}");
     }
-
 }

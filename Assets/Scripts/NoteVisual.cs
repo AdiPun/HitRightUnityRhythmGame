@@ -2,38 +2,39 @@ using UnityEngine;
 
 public class NoteVisual : MonoBehaviour
 {
+    private float m_speed;
     private int m_targetBeat;
-    private Metronome m_metronome;
-    private float m_travelBeats;
+    private Transform m_target;
+    private bool m_isActive = false;
 
-    private Vector3 m_spawnPos;
-    private Vector3 m_targetPos;
-
-    public void Initialize(int targetBeat, Metronome metronome, float travelBeats, Vector3 spawnPos, Vector3 targetPos)
+    public void Initialise(Transform target, Transform spawn, int targetBeat, float speed)
     {
+        m_target = target;
         m_targetBeat = targetBeat;
-        m_metronome = metronome;
-        m_travelBeats = travelBeats;
-        m_spawnPos = spawnPos;
-        m_targetPos = targetPos;
-
-        transform.position = spawnPos;
+        m_speed = speed;
+        m_isActive = true;
+        transform.position = spawn.position;
     }
 
     void Update()
     {
-        float currentBeat = m_metronome.GetActiveBeat();
+        if (!m_isActive) return;
 
-        float startBeat = m_targetBeat - m_travelBeats;
+        transform.position = Vector3.MoveTowards(transform.position, m_target.position, m_speed * Time.deltaTime);
 
-        float t = Mathf.InverseLerp(startBeat, m_targetBeat, currentBeat);
-
-        transform.position = Vector3.Lerp(m_spawnPos, m_targetPos, t);
-
-        if (currentBeat > m_targetBeat + 1f)
+        if (Vector3.Distance(transform.position, m_target.position) < 0.01f)
         {
-            Destroy(gameObject);
+            // Reached the target without being hit, deactivate it
+            m_isActive = false;
+            gameObject.SetActive(false);
         }
     }
 
+    public void Hit()
+    {
+        m_isActive = false;
+        gameObject.SetActive(false);
+    }
+
+    public int GetTargetBeat() => m_targetBeat;
 }

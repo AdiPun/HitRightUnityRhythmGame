@@ -9,13 +9,13 @@ public class Judge : MonoBehaviour
     [SerializeField] private PlayerInput m_playerInput;
     [SerializeField] private Composer m_composer;
     [SerializeField] private MusicPlayer m_musicPlayer;
+    [SerializeField] private NoteSpawner m_noteSpawner;
 
     [SerializeField] private UnityEvent<InputOutcome> m_judgeOutcomeEvent;
     private RequiredGoal m_currentGoal;
 
-
     [Header("Timing Windows (ms)")]
-    [SerializeField] private float m_perfectMs = 50f;
+    [SerializeField] private float m_perfectMs = 60f;
     [SerializeField] private float m_hitMs = 80f;
     [SerializeField] private float m_marginMs = 100f;
 
@@ -23,7 +23,10 @@ public class Judge : MonoBehaviour
 
     void Start()
     {
-
+        m_judgeOutcomeEvent.AddListener((outcome) =>
+        {
+            m_noteSpawner.RemoveNote(m_currentGoal.absoluteBeatIndex);
+        });
     }
 
     void Update()
@@ -152,11 +155,12 @@ public class Judge : MonoBehaviour
         return InputOutcome.Miss;
     }
 
+
+
     // --- Getters ---
     public float GetMarginMs() => m_marginMs;
     public int GetCurrentTargetBeat()
     {
         return m_currentGoal != null ? m_currentGoal.absoluteBeatIndex : -1;
     }
-
 }
