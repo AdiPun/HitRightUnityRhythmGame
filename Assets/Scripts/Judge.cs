@@ -37,14 +37,28 @@ public class Judge : MonoBehaviour
     {
         m_currentGoal = goal;
         m_goalHit = false;
-        //Debug.Log($"NEW TARGET BEAT: {goal.absoluteBeatIndex}");
+    }
+
+    private bool IsWithinMargin()
+    {
+        if (m_currentGoal == null)
+        {
+            return false;
+        }
+        float nowMs = m_musicPlayer.GetElapsedTimeInMs();
+        float targetMs = m_currentGoal.absoluteBeatIndex * m_musicPlayer.GetBeatDurationMs();
+        return Mathf.Abs(nowMs - targetMs) <= m_marginMs;
     }
 
     private void CheckInput(InputLane lane)
     {
         if (m_currentGoal == null)
         {
-            Debug.Log("No current goal set!");
+            return;
+        }
+
+        if (!IsWithinMargin()) // If the input is outside the margin, just ignore it. This is so notes don't get swallowed up by early presses
+        {
             return;
         }
 
@@ -55,7 +69,6 @@ public class Judge : MonoBehaviour
         else
         {
             m_judgeOutcomeEvent.Invoke(InputOutcome.Miss); // Send outcome to GameManager
-            Debug.Log("Wrong input");
             m_goalHit = true;
             m_composer.AdvanceGoal();
         }
@@ -72,24 +85,18 @@ public class Judge : MonoBehaviour
 
     public void OnButton2(InputAction.CallbackContext context)
     {
-        Debug.Log("Button 2 callback fired");
-
         if (!context.performed) return;
         CheckInput(InputLane.Lane2);
     }
 
     public void OnButton3(InputAction.CallbackContext context)
     {
-        Debug.Log("Button 3 callback fired");
-
         if (!context.performed) return;
         CheckInput(InputLane.Lane3);
     }
 
     public void OnButton4(InputAction.CallbackContext context)
     {
-        Debug.Log("Button 4 callback fired");
-
         if (!context.performed) return;
         CheckInput(InputLane.Lane4);
     }
@@ -107,12 +114,10 @@ public class Judge : MonoBehaviour
         m_composer.AdvanceGoal();
     }
 
-
     public void CheckForMiss(int lastBeat) // Listens to Metronome's exit beat event to know when to miss
     {
         if (m_currentGoal == null)
         {
-            Debug.Log("No current goal set!");
             return;
         }
         Debug.Assert(m_metronome != null, "metronome is not assigned!");

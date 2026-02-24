@@ -7,12 +7,20 @@ public class NoteVisual : MonoBehaviour
     private Transform m_target;
     private bool m_isActive = false;
 
-    public void Initialise(Transform target, Transform spawn, int targetBeat, float speed)
+    private Vector3 m_travelDirection; // To do things after it reaches the target
+    private float m_overshootSeconds;
+    private float m_overshootTimer = 0f;
+    private bool m_overshooting = false;
+    public void Initialise(Transform target, Transform spawn, int targetBeat, float speed, float lateMarginMs)
     {
         m_target = target;
         m_targetBeat = targetBeat;
         m_speed = speed;
         m_isActive = true;
+        m_overshooting = false;
+        m_overshootTimer = 0f;
+        m_overshootSeconds = lateMarginMs / 1000f;
+        m_travelDirection = (target.position - spawn.position).normalized;
         transform.position = spawn.position;
     }
 
@@ -20,13 +28,30 @@ public class NoteVisual : MonoBehaviour
     {
         if (!m_isActive) return;
 
-        transform.position = Vector3.MoveTowards(transform.position, m_target.position, m_speed * Time.deltaTime);
-
-        if (Vector3.Distance(transform.position, m_target.position) < 0.01f)
+        if (!m_overshooting) // Move towards target if it's not in the overshooting phase
         {
-            // Reached the target without being hit, deactivate it
-            m_isActive = false;
-            gameObject.SetActive(false);
+            transform.position += m_travelDirection * m_speed * Time.deltaTime;
+
+            // Check if we've reached or passed the target
+            Vector3 toTarget = m_target.position - transform.position;
+            if (Vector3.Dot(toTarget, m_travelDirection) <= 0f)
+            {
+                m_overshooting = true;
+                m_overshootTimer = 0f;
+            }
+        }
+        else
+        {
+            // Keep moving in the same direction so the note passes the hitline
+            // Later this can change the object into a physics object and get hit away
+            transform.position += m_travelDirection * m_speed * Time.deltaTime;
+            m_overshootTimer += Time.deltaTime;
+
+            if (m_overshootTimer >= m_overshootSeconds)
+            {
+                m_isActive = false;
+                gameObject.SetActive(false);
+            }
         }
     }
 

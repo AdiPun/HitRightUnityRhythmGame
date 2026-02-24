@@ -5,6 +5,7 @@ public class NoteSpawner : MonoBehaviour
 {
     [SerializeField] private MusicPlayer m_musicPlayer;
     [SerializeField] private Composer m_composer;
+    [SerializeField] private Judge m_judge;
     [SerializeField] private NoteVisual m_notePrefab;
     [SerializeField] private Transform[] m_noteSpawn;
     [SerializeField] private Transform[] m_noteTarget;
@@ -50,7 +51,7 @@ public class NoteSpawner : MonoBehaviour
         float distance = Vector3.Distance(m_noteSpawn[laneIndex].position, m_noteTarget[laneIndex].position);
         float speed = distance / m_noteTravelTimeSeconds;
 
-        note.Initialise(m_noteTarget[laneIndex], m_noteSpawn[laneIndex], goal.absoluteBeatIndex, speed);
+        note.Initialise(m_noteTarget[laneIndex], m_noteSpawn[laneIndex], goal.absoluteBeatIndex, speed, m_judge.GetMarginMs());
 
         m_activeNotes[goal.absoluteBeatIndex] = note;
     }
