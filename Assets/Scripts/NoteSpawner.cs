@@ -7,16 +7,16 @@ public class NoteSpawner : MonoBehaviour
     [SerializeField] private Composer m_composer;
     [SerializeField] private Judge m_judge;
     [SerializeField] private NoteVisual m_notePrefab;
+    [SerializeField] private float m_noteTravelTimeSeconds = 2.0f;
     [SerializeField] private Transform[] m_noteSpawn;
     [SerializeField] private Transform[] m_noteTarget;
-    [SerializeField] private float m_noteTravelTimeSeconds = 2.0f;
-
+    private ParticleSystem m_particleSystem;
     private float m_travelBeats;
     private int m_nextSpawnIndex = 0;
-    private Dictionary<int, NoteVisual> m_activeNotes = new();
-
+    private Dictionary<int, NoteVisual> m_activeNotes = new(); // Dictionary to track active notes by their beat index
     void Start()
     {
+        m_particleSystem = GetComponent<ParticleSystem>();
         m_travelBeats = m_noteTravelTimeSeconds / m_musicPlayer.GetBeatDurationSeconds();
     }
 
@@ -31,7 +31,7 @@ public class NoteSpawner : MonoBehaviour
 
             if (currentBeat >= goal.absoluteBeatIndex - m_travelBeats)
             {
-                SpawnNote(goal);
+                SpawnNotePrefab(goal);
                 m_nextSpawnIndex++;
             }
             else
@@ -41,17 +41,18 @@ public class NoteSpawner : MonoBehaviour
         }
     }
 
-    public void SpawnNote(RequiredGoal goal)
+    public void SpawnNotePrefab(RequiredGoal goal)
     {
         int laneIndex = (int)goal.lane;
 
         NoteVisual note = Instantiate(m_notePrefab);
         note.transform.position = m_noteSpawn[laneIndex].position;
+        note.m_noteSpawner = this; // Reference to noteSpawner
 
         float distance = Vector3.Distance(m_noteSpawn[laneIndex].position, m_noteTarget[laneIndex].position);
         float speed = distance / m_noteTravelTimeSeconds;
 
-        note.Initialise(m_noteTarget[laneIndex], m_noteSpawn[laneIndex], goal.absoluteBeatIndex, speed, m_judge.GetMarginMs());
+        note.Initialise(m_noteTarget[laneIndex], m_noteSpawn[laneIndex], goal.absoluteBeatIndex, speed);
 
         m_activeNotes[goal.absoluteBeatIndex] = note;
     }
@@ -75,5 +76,11 @@ public class NoteSpawner : MonoBehaviour
 
         m_activeNotes.Clear();
         m_nextSpawnIndex = 0;
+    }
+
+        public void SpawnParticles(Transform transform)
+    {
+        m_particleSystem.transform.position = transform.position;
+        m_particleSystem.Play();
     }
 }

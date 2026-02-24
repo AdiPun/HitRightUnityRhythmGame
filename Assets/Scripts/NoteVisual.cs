@@ -1,17 +1,18 @@
 using UnityEngine;
+using UnityEngine.Events;
 
 public class NoteVisual : MonoBehaviour
 {
-    private float m_speed;
+    [SerializeField] private float m_speed;
+    [SerializeField] private float m_overshootSeconds = 3f;
+    public NoteSpawner m_noteSpawner;
     private int m_targetBeat;
     private Transform m_target;
     private bool m_isActive = false;
-
     private Vector3 m_travelDirection; // To do things after it reaches the target
-    private float m_overshootSeconds;
     private float m_overshootTimer = 0f;
     private bool m_overshooting = false;
-    public void Initialise(Transform target, Transform spawn, int targetBeat, float speed, float lateMarginMs)
+    public void Initialise(Transform target, Transform spawn, int targetBeat, float speed)
     {
         m_target = target;
         m_targetBeat = targetBeat;
@@ -19,7 +20,7 @@ public class NoteVisual : MonoBehaviour
         m_isActive = true;
         m_overshooting = false;
         m_overshootTimer = 0f;
-        m_overshootSeconds = lateMarginMs / 1000f;
+        //m_overshootSeconds = lateMarginMs / 1000f;
         m_travelDirection = (target.position - spawn.position).normalized;
         transform.position = spawn.position;
     }
@@ -58,6 +59,7 @@ public class NoteVisual : MonoBehaviour
     public void Hit()
     {
         m_isActive = false;
+        m_noteSpawner.SpawnParticles(transform); // Create particles
         gameObject.SetActive(false);
     }
 
