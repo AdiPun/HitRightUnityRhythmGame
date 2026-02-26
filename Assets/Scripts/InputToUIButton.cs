@@ -10,6 +10,7 @@ public class InputToUIButton : MonoBehaviour
     [SerializeField] private Color idleColor;
     [SerializeField] private Color pressedColor;
     [SerializeField] private string inputName = "Button 1";
+    [SerializeField] private ParticleSystem inputParticleSystem;
 
     void Update()
     {

@@ -13,7 +13,6 @@ public class MusicPlayer : MonoBehaviour
         Debug.Assert(m_audioSource != null, "AudioSource component is not assigned!");
         Debug.Assert(m_audioSource.clip != null, "AudioSource does not have an audio clip assigned!");
         Debug.Log($"Track Length: {GetTrackLengthSeconds():0} seconds | Beat Duration: {GetBeatDurationSeconds():0} seconds");
-
     }
 
     void Update()

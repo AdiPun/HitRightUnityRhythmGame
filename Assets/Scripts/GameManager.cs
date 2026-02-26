@@ -9,7 +9,6 @@ public class GameManager : MonoBehaviour
     [SerializeField] private int m_hit = 0;
     [SerializeField] private int m_miss = 0;
 
-    [SerializeField] private UnityEvent m_gameStart;
     [SerializeField] private Composer m_composer;
     [SerializeField] private NoteSpawner m_noteSpawner;
 

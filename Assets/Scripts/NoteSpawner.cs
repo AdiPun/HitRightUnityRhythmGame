@@ -78,7 +78,7 @@ public class NoteSpawner : MonoBehaviour
         m_nextSpawnIndex = 0;
     }
 
-        public void SpawnParticles(Transform transform)
+    public void SpawnParticles(Transform transform)
     {
         m_particleSystem.transform.position = transform.position;
         m_particleSystem.Play();

@@ -25,7 +25,10 @@ public class Judge : MonoBehaviour
     {
         m_judgeOutcomeEvent.AddListener((outcome) =>
         {
-            m_noteSpawner.RemoveNote(m_currentGoal.absoluteBeatIndex);
+            if (outcome != InputOutcome.Miss) // If it's a hit of any kind, remove the note, but don't if it's a miss
+            {
+                m_noteSpawner.RemoveNote(m_currentGoal.absoluteBeatIndex);
+            }
         });
     }
 

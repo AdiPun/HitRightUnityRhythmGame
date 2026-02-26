@@ -4,7 +4,7 @@ using UnityEngine.Events;
 public class NoteVisual : MonoBehaviour
 {
     [SerializeField] private float m_speed;
-    [SerializeField] private float m_overshootSeconds = 3f;
+    [SerializeField] private float m_overshootSeconds = 6f;
     public NoteSpawner m_noteSpawner;
     private int m_targetBeat;
     private Transform m_target;
@@ -20,7 +20,6 @@ public class NoteVisual : MonoBehaviour
         m_isActive = true;
         m_overshooting = false;
         m_overshootTimer = 0f;
-        //m_overshootSeconds = lateMarginMs / 1000f;
         m_travelDirection = (target.position - spawn.position).normalized;
         transform.position = spawn.position;
     }
