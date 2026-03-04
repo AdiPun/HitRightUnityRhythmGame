@@ -125,6 +125,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 31fc57b6f81d9cd40b7c77bf8a65bd7c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NoteVisual
-  m_speed: 0
+  m_arcRadius: 7
   m_overshootSeconds: 3
+  m_holdTail: {fileID: 0}
   m_noteSpawner: {fileID: 0}

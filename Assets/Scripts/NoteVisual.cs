@@ -1,106 +1,134 @@
 using UnityEngine;
 
 /// <summary>
-/// Handles movement and visuals for a single note lane.
-/// Knows its own lane index so it can tell NoteSpawner exactly where to burst particles.
-/// Contains a self-built hold trail ParticleSystem that plays during HoldActive phase.
+/// Moves a note along a quadratic Bezier arc that produces a boomerang/frisbee
+/// sweep. The control point is placed far out to the side of the pitcher→target
+/// line, so the note visibly leaves in a wide outward direction and curves back
+/// to arrive at the target.
+///
+/// Each lane's control point is offset in a distinct camera-space direction so
+/// the player can read the lane from the initial throw angle.
+///
+/// Quadratic Bezier: B(t) = (1-t)²·P0 + 2(1-t)t·P1 + t²·P2
+///   P0 = pitcher (spawn)
+///   P1 = the wide "throw" control point — far off to the side
+///   P2 = target
 /// </summary>
 public class NoteVisual : MonoBehaviour
 {
-    [SerializeField] private float m_overshootSeconds = 0.15f;
-    [SerializeField] private float m_arcHeightFactor = 0.3f;
+    [Header("Arc")]
+    [Tooltip("How far the control point sits away from the midpoint of the spawn→target line. " +
+             "Larger = wider, more dramatic sweep.")]
+    [SerializeField] private float m_arcRadius = 3.5f;
+
+    [SerializeField] private float m_overshootSeconds = 0.18f;
     [SerializeField] private Transform m_holdTail;
 
     [HideInInspector] public NoteSpawner m_noteSpawner;
 
+    // Runtime
     private NoteType m_noteType;
-    private int m_targetBeat;
-    private int m_laneIndex;          // set in Initialise, passed to SpawnHitParticles
+    private int   m_targetBeat;
+    private int   m_laneIndex;
     private float m_speed;
     private float m_travelTime;
     private float m_elapsed;
 
-    private Vector3 m_spawnPos;
-    private Vector3 m_targetPos;
-    private Vector3 m_controlPoint;
-    private Vector3 m_travelDirection;
+    // Bezier points
+    private Vector3 m_P0; // spawn (pitcher)
+    private Vector3 m_P1; // control — wide off-axis throw point
+    private Vector3 m_P2; // target
+
+    // Direction at t=1 for overshoot drift
+    private Vector3 m_arrivalDirection;
 
     private float m_holdDurationSeconds;
-    private bool m_isHoldActive;
+    private bool  m_isHoldActive;
     private float m_holdElapsed;
 
     private enum Phase { Travelling, Overshooting, HoldActive, Done }
     private Phase m_phase = Phase.Done;
     private float m_overshootTimer;
 
-    // Hold trail — built in Initialise the first time a hold note is created
     private ParticleSystem m_holdTrail;
 
     // -----------------------------------------------------------------------
     // Initialise
     // -----------------------------------------------------------------------
 
+    /// <param name="controlOffset">
+    /// Camera-space offset applied to the midpoint of P0→P2 to build P1.
+    /// Supplied by NoteSpawner per lane. The direction is the "throw direction"
+    /// the player sees. e.g. (-3, 2) = throws wide left and high, curves back in.
+    /// </param>
     public void Initialise(
         Transform target,
         Transform spawn,
-        int targetBeat,
-        float speed,
-        NoteType noteType,
-        float holdDurationSeconds,
-        int laneIndex = 0)
+        int       targetBeat,
+        float     speed,
+        NoteType  noteType,
+        float     holdDurationSeconds,
+        int       laneIndex,
+        Vector3   cameraRight,
+        Vector3   cameraUp,
+        Vector2   controlOffset)
     {
-        m_targetBeat = targetBeat;
-        m_laneIndex = laneIndex;
-        m_speed = speed;
-        m_noteType = noteType;
+        m_targetBeat          = targetBeat;
+        m_laneIndex           = laneIndex;
+        m_speed               = speed;
+        m_noteType            = noteType;
         m_holdDurationSeconds = holdDurationSeconds;
-        m_isHoldActive = false;
-        m_holdElapsed = 0f;
-        m_overshootTimer = 0f;
+        m_isHoldActive        = false;
+        m_holdElapsed         = 0f;
+        m_overshootTimer      = 0f;
 
-        m_spawnPos = spawn.position;
-        m_targetPos = target.position;
-        m_travelDirection = (m_targetPos - m_spawnPos).normalized;
+        m_P0 = spawn.position;
+        m_P2 = target.position;
 
-        Vector3 mid = (m_spawnPos + m_targetPos) * 0.5f;
-        Vector3 perp = Vector3.Cross(m_travelDirection, Vector3.forward).normalized;
-        float span = Vector3.Distance(m_spawnPos, m_targetPos);
-        m_controlPoint = mid + perp * span * m_arcHeightFactor;
+        // Build the control point by taking the midpoint of spawn→target and
+        // pushing it far out in the lane's camera-space throw direction.
+        // The arc radius scales the magnitude of that push.
+        Vector3 mid = (m_P0 + m_P2) * 0.5f;
+        m_P1 = mid
+             + cameraRight * (controlOffset.x * m_arcRadius)
+             + cameraUp    * (controlOffset.y * m_arcRadius);
 
-        m_travelTime = ApproxArcLength(20) / m_speed;
-        m_elapsed = 0f;
-        m_phase = Phase.Travelling;
+        // Arrival direction = tangent at t=1: 2(P2 - P1)
+        m_arrivalDirection = (m_P2 - m_P1).normalized;
 
-        transform.position = m_spawnPos;
+        float arcLen = ApproxArcLength(24);
+        m_travelTime = arcLen / m_speed;
+        m_elapsed    = 0f;
+        m_phase      = Phase.Travelling;
+
+        transform.position = m_P0;
         gameObject.SetActive(true);
 
         if (m_holdTail != null)
             m_holdTail.gameObject.SetActive(noteType == NoteType.Hold);
 
-        // Build hold trail once, reuse on subsequent Initialise calls
         if (noteType == NoteType.Hold)
         {
-            if (m_holdTrail == null)
-                m_holdTrail = BuildHoldTrail();
+            if (m_holdTrail == null) m_holdTrail = BuildHoldTrail();
             m_holdTrail.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         }
-        else if (m_holdTrail != null)
+        else
         {
-            m_holdTrail.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            m_holdTrail?.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         }
     }
 
     // -----------------------------------------------------------------------
-    // Update FSM
+    // FSM
     // -----------------------------------------------------------------------
 
     void Update()
     {
         switch (m_phase)
         {
-            case Phase.Travelling: UpdateTravelling(); break;
+            case Phase.Travelling:   UpdateTravelling();   break;
             case Phase.Overshooting: UpdateOvershooting(); break;
-            case Phase.HoldActive: UpdateHold(); break;
+            case Phase.HoldActive:   UpdateHold();         break;
         }
     }
 
@@ -108,7 +136,12 @@ public class NoteVisual : MonoBehaviour
     {
         m_elapsed += Time.deltaTime;
         float t = Mathf.Clamp01(m_elapsed / m_travelTime);
-        transform.position = EvalBezier(t);
+        transform.position = EvalQuadratic(t);
+
+        // Face the direction of travel so the note visually rotates as it sweeps
+        Vector3 tangent = EvalTangent(t);
+        if (tangent.sqrMagnitude > 0.001f)
+            transform.rotation = Quaternion.LookRotation(tangent);
 
         if (m_noteType == NoteType.Hold && m_holdTail != null)
         {
@@ -122,9 +155,7 @@ public class NoteVisual : MonoBehaviour
     private void OnReachedTarget()
     {
         if (m_noteType == NoteType.Hold && m_isHoldActive)
-        {
             StartHoldPhase();
-        }
         else
         {
             m_phase = Phase.Overshooting;
@@ -134,8 +165,9 @@ public class NoteVisual : MonoBehaviour
 
     private void UpdateOvershooting()
     {
-        transform.position += m_travelDirection * m_speed * Time.deltaTime;
-        m_overshootTimer += Time.deltaTime;
+        // Drift in the arrival direction so the note flies past the target naturally
+        transform.position += m_arrivalDirection * m_speed * Time.deltaTime;
+        m_overshootTimer   += Time.deltaTime;
         if (m_overshootTimer >= m_overshootSeconds)
             Deactivate();
     }
@@ -152,7 +184,6 @@ public class NoteVisual : MonoBehaviour
 
         if (m_holdElapsed >= m_holdDurationSeconds)
         {
-            // Hold completed — burst particles at this lane and deactivate
             m_noteSpawner?.SpawnHitParticles(m_laneIndex);
             StopHoldTrail();
             Deactivate();
@@ -160,10 +191,9 @@ public class NoteVisual : MonoBehaviour
     }
 
     // -----------------------------------------------------------------------
-    // Public API — called by NoteSpawner
+    // Public API
     // -----------------------------------------------------------------------
 
-    /// <summary>Tap or multi hit on this lane. lane is passed so NoteSpawner can burst at the right position.</summary>
     public void Hit(InputLane lane)
     {
         m_noteSpawner?.SpawnHitParticles((int)lane);
@@ -173,26 +203,20 @@ public class NoteVisual : MonoBehaviour
     public void BeginHold()
     {
         m_isHoldActive = true;
-
         if (m_phase == Phase.Overshooting)
         {
-            // Already past the line — snap back and start hold immediately
-            transform.position = m_targetPos;
+            transform.position = m_P2;
             StartHoldPhase();
         }
-        // If still Travelling, OnReachedTarget will call StartHoldPhase when it arrives
     }
 
     public void ReleaseHold(bool withinWindow)
     {
-        if (withinWindow && m_holdElapsed >= m_holdDurationSeconds * 0.5f)
-            m_noteSpawner?.SpawnHitParticles(m_laneIndex);
-
+        if (withinWindow) m_noteSpawner?.SpawnHitParticles(m_laneIndex);
         StopHoldTrail();
         Deactivate();
     }
 
-    /// <summary>Silently deactivate without particles — used for auto-miss.</summary>
     public void ForceDeactivate() => Deactivate();
 
     // -----------------------------------------------------------------------
@@ -201,107 +225,97 @@ public class NoteVisual : MonoBehaviour
 
     private void StartHoldPhase()
     {
-        m_phase = Phase.HoldActive;
+        m_phase       = Phase.HoldActive;
         m_holdElapsed = 0f;
-
         if (m_holdTrail != null)
         {
-            m_holdTrail.transform.position = m_targetPos;
+            m_holdTrail.transform.position = m_P2;
             m_holdTrail.Play();
         }
     }
 
     private void StopHoldTrail()
-    {
-        m_holdTrail?.Stop(true, ParticleSystemStopBehavior.StopEmitting);
-    }
+        => m_holdTrail?.Stop(true, ParticleSystemStopBehavior.StopEmitting);
 
-    /// <summary>
-    /// Builds a looping particle trail as a child of this GameObject.
-    /// No prefab or asset needed — purely constructed in code.
-    /// </summary>
     private ParticleSystem BuildHoldTrail()
     {
         var go = new GameObject("HoldTrail");
         go.transform.SetParent(transform);
         go.transform.localPosition = Vector3.zero;
-
         var ps = go.AddComponent<ParticleSystem>();
 
         var main = ps.main;
-        main.loop = true;
-        main.playOnAwake = false;
-        main.duration = 1f;
-        main.startLifetime = new ParticleSystem.MinMaxCurve(0.15f, 0.35f);
-        main.startSpeed = new ParticleSystem.MinMaxCurve(0.3f, 1.2f);
-        main.startSize = new ParticleSystem.MinMaxCurve(0.03f, 0.1f);
-        main.maxParticles = 128;
+        main.loop            = true;
+        main.playOnAwake     = false;
+        main.duration        = 1f;
+        main.startLifetime   = new ParticleSystem.MinMaxCurve(0.15f, 0.35f);
+        main.startSpeed      = new ParticleSystem.MinMaxCurve(0.3f, 1.2f);
+        main.startSize       = new ParticleSystem.MinMaxCurve(0.03f, 0.1f);
+        main.maxParticles    = 128;
         main.simulationSpace = ParticleSystemSimulationSpace.World;
-        main.startColor = new ParticleSystem.MinMaxGradient(
-            new Color(1f, 0.9f, 0.3f, 1f),   // warm yellow core
-            new Color(1f, 0.4f, 0.1f, 1f)    // hot orange edge
-        );
+        main.startColor      = new ParticleSystem.MinMaxGradient(
+            new Color(1f, 0.9f, 0.3f, 1f),
+            new Color(1f, 0.4f, 0.1f, 1f));
 
         var emission = ps.emission;
-        emission.enabled = true;
         emission.rateOverTime = 40f;
 
-        var shape = ps.shape;
-        shape.enabled = true;
+        var shape    = ps.shape;
         shape.shapeType = ParticleSystemShapeType.Circle;
-        shape.radius = 0.12f;
+        shape.radius    = 0.12f;
 
-        var col = ps.colorOverLifetime;
+        var col  = ps.colorOverLifetime;
         col.enabled = true;
         var grad = new Gradient();
         grad.SetKeys(
-            new[] {
-                new GradientColorKey(new Color(1f, 0.9f, 0.5f), 0f),
-                new GradientColorKey(new Color(1f, 0.3f, 0.05f), 1f)
-            },
-            new[] {
-                new GradientAlphaKey(1f, 0f),
-                new GradientAlphaKey(0f, 1f)
-            }
-        );
+            new[] { new GradientColorKey(new Color(1f, 0.9f, 0.5f), 0f),
+                    new GradientColorKey(new Color(1f, 0.3f, 0.05f), 1f) },
+            new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
         col.color = new ParticleSystem.MinMaxGradient(grad);
 
-        var size = ps.sizeOverLifetime;
+        var size  = ps.sizeOverLifetime;
         size.enabled = true;
         size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.EaseInOut(0f, 1f, 1f, 0f));
 
-        // Gentle outward velocity to give a flickering ember feel
-        var vel = ps.velocityOverLifetime;
+        var vel   = ps.velocityOverLifetime;
         vel.enabled = true;
-        vel.space = ParticleSystemSimulationSpace.Local;
-        vel.radial = new ParticleSystem.MinMaxCurve(0.5f, 1.5f);
+        vel.space   = ParticleSystemSimulationSpace.Local;
+        vel.radial  = new ParticleSystem.MinMaxCurve(0.5f, 1.5f);
 
         return ps;
     }
 
     // -----------------------------------------------------------------------
-    // Bezier helpers
+    // Bezier math
     // -----------------------------------------------------------------------
 
-    private Vector3 EvalBezier(float t)
+    private Vector3 EvalQuadratic(float t)
     {
         float u = 1f - t;
-        return u * u * m_spawnPos
-             + 2f * u * t * m_controlPoint
-             + t * t * m_targetPos;
+        return u * u * m_P0
+             + 2f * u * t * m_P1
+             + t * t * m_P2;
+    }
+
+    // Tangent (first derivative) of the quadratic Bezier — used to orient the note
+    private Vector3 EvalTangent(float t)
+    {
+        // B'(t) = 2(1-t)(P1-P0) + 2t(P2-P1)
+        return 2f * (1f - t) * (m_P1 - m_P0)
+             + 2f * t        * (m_P2 - m_P1);
     }
 
     private float ApproxArcLength(int steps)
     {
-        float length = 0f;
-        Vector3 prev = EvalBezier(0f);
+        float   len  = 0f;
+        Vector3 prev = EvalQuadratic(0f);
         for (int i = 1; i <= steps; i++)
         {
-            Vector3 curr = EvalBezier(i / (float)steps);
-            length += Vector3.Distance(prev, curr);
-            prev = curr;
+            Vector3 curr = EvalQuadratic(i / (float)steps);
+            len  += Vector3.Distance(prev, curr);
+            prev  = curr;
         }
-        return length;
+        return len;
     }
 
     private void Deactivate()

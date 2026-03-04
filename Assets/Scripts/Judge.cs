@@ -21,21 +21,19 @@ public class Judge : MonoBehaviour
     private bool m_hasGoalBeenHit;
 
     // Hold tracking — stored separately so they survive SetCurrentGoal being called
-    // for the next note while a hold is still running
+    // for the next note while the hold is still running
     private bool m_isHoldInProgress;
     private int m_holdBeatIndex;
-    private float m_holdDurationBeats;
+    private float m_holdDurationSeconds;
+    private float m_holdPressedAtMs;
 
-    void Start()
-    {
-        // Nothing to wire here anymore — RemoveNotesAtBeat replaced by HitLane
-    }
+    void Start() { }
 
     public void SetCurrentGoal(RequiredGoal goal)
     {
         m_currentGoal = goal;
         m_hasGoalBeenHit = false;
-        // Do NOT reset m_isHoldInProgress — a hold may still be running
+        // Do NOT reset m_isHoldInProgress here
     }
 
     // --- Input ---
@@ -67,15 +65,9 @@ public class Judge : MonoBehaviour
 
         switch (m_currentGoal.noteType)
         {
-            case NoteType.Tap:
-                EvaluateTap(inputLane);
-                break;
-            case NoteType.Multi:
-                EvaluateMultiLane(inputLane);
-                break;
-            case NoteType.Hold:
-                BeginHold();
-                break;
+            case NoteType.Tap:   EvaluateTap(inputLane);   break;
+            case NoteType.Multi: EvaluateMultiLane(inputLane); break;
+            case NoteType.Hold:  BeginHold(); break;
         }
     }
 
@@ -83,16 +75,17 @@ public class Judge : MonoBehaviour
     {
         if (!m_isHoldInProgress) return;
 
-        float nowMs = m_musicPlayer.GetElapsedTimeInMs();
-        float holdEndMs = (m_holdBeatIndex + m_holdDurationBeats) * m_musicPlayer.GetBeatDurationMs();
-        bool isWithinWindow = Mathf.Abs(nowMs - holdEndMs) <= m_marginMs;
+        float heldMs = m_musicPlayer.GetElapsedTimeInMs() - m_holdPressedAtMs;
+        bool heldLongEnough = heldMs >= m_holdDurationSeconds * 1000f * 0.8f;
+        // 80 % threshold: forgives releasing very slightly early without punishing
+        // a deliberate early drop
 
         m_isHoldInProgress = false;
-        m_noteSpawner.ReleaseHold(m_holdBeatIndex, isWithinWindow);
+        m_noteSpawner.ReleaseHold(m_holdBeatIndex, heldLongEnough);
 
-        InputOutcome outcome = isWithinWindow ? InputOutcome.Hit : InputOutcome.Miss;
+        InputOutcome outcome = heldLongEnough ? InputOutcome.Hit : InputOutcome.Miss;
         m_judgeOutcomeEvent.Invoke(outcome);
-        Debug.Log($"Hold release: {outcome}");
+        Debug.Log($"Hold release: {outcome} (held {heldMs:0}ms / {m_holdDurationSeconds * 1000f:0}ms required)");
     }
 
     // -----------------------------------------------------------------------
@@ -105,15 +98,13 @@ public class Judge : MonoBehaviour
         InputOutcome outcome = GetTimingOutcome();
         m_judgeOutcomeEvent.Invoke(outcome);
         Debug.Log("Tap: " + outcome);
-
-        // HitLane removes the visual and returns true (single lane always clears in one press)
         m_noteSpawner.HitLane(m_currentGoal.absoluteBeatIndex, lane);
         m_composer.AdvanceGoal();
     }
 
     // -----------------------------------------------------------------------
     // Multi — each lane press is evaluated independently.
-    // Goal only advances once ALL lanes have been hit.
+    // Goal advances only once ALL lanes have been hit.
     // -----------------------------------------------------------------------
 
     private void EvaluateMultiLane(InputLane lane)
@@ -140,7 +131,8 @@ public class Judge : MonoBehaviour
         m_hasGoalBeenHit = true;
         m_isHoldInProgress = true;
         m_holdBeatIndex = m_currentGoal.absoluteBeatIndex;
-        m_holdDurationBeats = m_currentGoal.holdDurationBeats;
+        m_holdDurationSeconds = m_currentGoal.holdDurationBeats * m_musicPlayer.GetBeatDurationSeconds();
+        m_holdPressedAtMs = m_musicPlayer.GetElapsedTimeInMs();
 
         m_noteSpawner.BeginHoldAtBeat(m_holdBeatIndex);
 
@@ -148,9 +140,8 @@ public class Judge : MonoBehaviour
         m_judgeOutcomeEvent.Invoke(pressOutcome);
         Debug.Log("Hold begin: " + pressOutcome);
 
-        // Advance so the Composer sends the next goal while the hold runs.
-        // m_holdBeatIndex and m_holdDurationBeats are stored separately so
-        // OnRelease still resolves against the correct beat.
+        // Advance immediately so the Composer sends the next goal.
+        // m_holdBeatIndex / m_holdDurationSeconds survive the goal change.
         m_composer.AdvanceGoal();
     }
 
@@ -162,7 +153,7 @@ public class Judge : MonoBehaviour
     {
         if (m_currentGoal == null) return;
         if (m_hasGoalBeenHit) return;
-        if (m_isHoldInProgress) return; // can't press new notes while holding
+        if (m_isHoldInProgress) return;
 
         float nowMs = m_musicPlayer.GetElapsedTimeInMs();
         float targetMs = m_currentGoal.absoluteBeatIndex * m_musicPlayer.GetBeatDurationMs();
@@ -197,8 +188,8 @@ public class Judge : MonoBehaviour
         Debug.Log($"Now: {nowMs:0} | Target: {targetMs:0} | Delta: {deltaMs:0}");
 
         if (Mathf.Abs(deltaMs) <= m_perfectMs) return InputOutcome.Perfect;
-        if (Mathf.Abs(deltaMs) <= m_hitMs) return InputOutcome.Hit;
-        if (Mathf.Abs(deltaMs) <= m_marginMs) return deltaMs < 0 ? InputOutcome.Early : InputOutcome.Late;
+        if (Mathf.Abs(deltaMs) <= m_hitMs)     return InputOutcome.Hit;
+        if (Mathf.Abs(deltaMs) <= m_marginMs)  return deltaMs < 0 ? InputOutcome.Early : InputOutcome.Late;
         return InputOutcome.Miss;
     }
 
