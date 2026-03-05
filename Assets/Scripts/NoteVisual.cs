@@ -28,8 +28,8 @@ public class NoteVisual : MonoBehaviour
 
     // Runtime
     private NoteType m_noteType;
-    private int   m_targetBeat;
-    private int   m_laneIndex;
+    private int m_targetBeat;
+    private int m_laneIndex;
     private float m_speed;
     private float m_travelTime;
     private float m_elapsed;
@@ -43,7 +43,7 @@ public class NoteVisual : MonoBehaviour
     private Vector3 m_arrivalDirection;
 
     private float m_holdDurationSeconds;
-    private bool  m_isHoldActive;
+    private bool m_isHoldActive;
     private float m_holdElapsed;
 
     private enum Phase { Travelling, Overshooting, HoldActive, Done }
@@ -64,23 +64,25 @@ public class NoteVisual : MonoBehaviour
     public void Initialise(
         Transform target,
         Transform spawn,
-        int       targetBeat,
-        float     speed,
-        NoteType  noteType,
-        float     holdDurationSeconds,
-        int       laneIndex,
-        Vector3   cameraRight,
-        Vector3   cameraUp,
-        Vector2   controlOffset)
+        int targetBeat,
+        float travelTime,
+        NoteType noteType,
+        float holdDurationSeconds,
+        int laneIndex,
+        Vector3 cameraRight,
+        Vector3 cameraUp,
+        Vector2 controlOffset)
     {
-        m_targetBeat          = targetBeat;
-        m_laneIndex           = laneIndex;
-        m_speed               = speed;
-        m_noteType            = noteType;
+        m_targetBeat = targetBeat;
+        m_laneIndex = laneIndex;
+        m_noteType = noteType;
         m_holdDurationSeconds = holdDurationSeconds;
-        m_isHoldActive        = false;
-        m_holdElapsed         = 0f;
-        m_overshootTimer      = 0f;
+        m_isHoldActive = false;
+        m_holdElapsed = 0f;
+        m_overshootTimer = 0f;
+
+
+
 
         m_P0 = spawn.position;
         m_P2 = target.position;
@@ -91,15 +93,16 @@ public class NoteVisual : MonoBehaviour
         Vector3 mid = (m_P0 + m_P2) * 0.5f;
         m_P1 = mid
              + cameraRight * (controlOffset.x * m_arcRadius)
-             + cameraUp    * (controlOffset.y * m_arcRadius);
+             + cameraUp * (controlOffset.y * m_arcRadius);
 
         // Arrival direction = tangent at t=1: 2(P2 - P1)
         m_arrivalDirection = (m_P2 - m_P1).normalized;
 
         float arcLen = ApproxArcLength(24);
-        m_travelTime = arcLen / m_speed;
-        m_elapsed    = 0f;
-        m_phase      = Phase.Travelling;
+        m_travelTime = travelTime;
+        m_speed = arcLen / m_travelTime;
+        m_elapsed = 0f;
+        m_phase = Phase.Travelling;
 
         transform.position = m_P0;
         gameObject.SetActive(true);
@@ -126,9 +129,9 @@ public class NoteVisual : MonoBehaviour
     {
         switch (m_phase)
         {
-            case Phase.Travelling:   UpdateTravelling();   break;
+            case Phase.Travelling: UpdateTravelling(); break;
             case Phase.Overshooting: UpdateOvershooting(); break;
-            case Phase.HoldActive:   UpdateHold();         break;
+            case Phase.HoldActive: UpdateHold(); break;
         }
     }
 
@@ -167,7 +170,7 @@ public class NoteVisual : MonoBehaviour
     {
         // Drift in the arrival direction so the note flies past the target naturally
         transform.position += m_arrivalDirection * m_speed * Time.deltaTime;
-        m_overshootTimer   += Time.deltaTime;
+        m_overshootTimer += Time.deltaTime;
         if (m_overshootTimer >= m_overshootSeconds)
             Deactivate();
     }
@@ -225,7 +228,7 @@ public class NoteVisual : MonoBehaviour
 
     private void StartHoldPhase()
     {
-        m_phase       = Phase.HoldActive;
+        m_phase = Phase.HoldActive;
         m_holdElapsed = 0f;
         if (m_holdTrail != null)
         {
@@ -244,27 +247,29 @@ public class NoteVisual : MonoBehaviour
         go.transform.localPosition = Vector3.zero;
         var ps = go.AddComponent<ParticleSystem>();
 
+        ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
         var main = ps.main;
-        main.loop            = true;
-        main.playOnAwake     = false;
-        main.duration        = 1f;
-        main.startLifetime   = new ParticleSystem.MinMaxCurve(0.15f, 0.35f);
-        main.startSpeed      = new ParticleSystem.MinMaxCurve(0.3f, 1.2f);
-        main.startSize       = new ParticleSystem.MinMaxCurve(0.03f, 0.1f);
-        main.maxParticles    = 128;
+        main.loop = true;
+        main.playOnAwake = false;
+        main.duration = 1f;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.15f, 0.35f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.3f, 1.2f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.03f, 0.1f);
+        main.maxParticles = 128;
         main.simulationSpace = ParticleSystemSimulationSpace.World;
-        main.startColor      = new ParticleSystem.MinMaxGradient(
+        main.startColor = new ParticleSystem.MinMaxGradient(
             new Color(1f, 0.9f, 0.3f, 1f),
             new Color(1f, 0.4f, 0.1f, 1f));
 
         var emission = ps.emission;
         emission.rateOverTime = 40f;
 
-        var shape    = ps.shape;
+        var shape = ps.shape;
         shape.shapeType = ParticleSystemShapeType.Circle;
-        shape.radius    = 0.12f;
+        shape.radius = 0.12f;
 
-        var col  = ps.colorOverLifetime;
+        var col = ps.colorOverLifetime;
         col.enabled = true;
         var grad = new Gradient();
         grad.SetKeys(
@@ -273,14 +278,14 @@ public class NoteVisual : MonoBehaviour
             new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 1f) });
         col.color = new ParticleSystem.MinMaxGradient(grad);
 
-        var size  = ps.sizeOverLifetime;
+        var size = ps.sizeOverLifetime;
         size.enabled = true;
         size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.EaseInOut(0f, 1f, 1f, 0f));
 
-        var vel   = ps.velocityOverLifetime;
+        var vel = ps.velocityOverLifetime;
         vel.enabled = true;
-        vel.space   = ParticleSystemSimulationSpace.Local;
-        vel.radial  = new ParticleSystem.MinMaxCurve(0.5f, 1.5f);
+        vel.space = ParticleSystemSimulationSpace.Local;
+        vel.radial = new ParticleSystem.MinMaxCurve(0.5f, 1.5f);
 
         return ps;
     }
@@ -302,18 +307,18 @@ public class NoteVisual : MonoBehaviour
     {
         // B'(t) = 2(1-t)(P1-P0) + 2t(P2-P1)
         return 2f * (1f - t) * (m_P1 - m_P0)
-             + 2f * t        * (m_P2 - m_P1);
+             + 2f * t * (m_P2 - m_P1);
     }
 
     private float ApproxArcLength(int steps)
     {
-        float   len  = 0f;
+        float len = 0f;
         Vector3 prev = EvalQuadratic(0f);
         for (int i = 1; i <= steps; i++)
         {
             Vector3 curr = EvalQuadratic(i / (float)steps);
-            len  += Vector3.Distance(prev, curr);
-            prev  = curr;
+            len += Vector3.Distance(prev, curr);
+            prev = curr;
         }
         return len;
     }

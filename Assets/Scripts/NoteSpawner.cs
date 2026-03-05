@@ -106,7 +106,7 @@ public class NoteSpawner : MonoBehaviour
                 m_noteTarget[laneIndex],
                 m_pitcherSpawn,
                 goal.absoluteBeatIndex,
-                speed,
+                m_noteTravelTimeSeconds,
                 goal.noteType,
                 holdSeconds,
                 laneIndex,
@@ -202,6 +202,8 @@ public class NoteSpawner : MonoBehaviour
 
     private static void ConfigureHitBurst(ParticleSystem ps)
     {
+        ps.Stop(true,ParticleSystemStopBehavior.StopEmittingAndClear);
+
         var main = ps.main;
         main.loop = false;
         main.playOnAwake = false;
