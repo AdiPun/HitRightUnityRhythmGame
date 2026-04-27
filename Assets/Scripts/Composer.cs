@@ -13,6 +13,7 @@ public class Composer : MonoBehaviour
     [SerializeField] private int m_leadInBeats = 4;
 
     private int m_nextGoalIndex = 0;
+    public RequiredGoal GetGoalAtBeat(int beatIndex) => m_chart.Find(g => g.absoluteBeatIndex == beatIndex);
 
     void Start()
     {
@@ -173,7 +174,10 @@ public class Composer : MonoBehaviour
         if (m_nextGoalIndex < m_chart.Count)
             m_sendNextGoalEvent?.Invoke(m_chart[m_nextGoalIndex]);
     }
+
+
 }
+
 
 public enum NoteType { Tap, Hold, Multi }
 

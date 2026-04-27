@@ -65,9 +65,9 @@ public class Judge : MonoBehaviour
 
         switch (m_currentGoal.noteType)
         {
-            case NoteType.Tap:   EvaluateTap(inputLane);   break;
+            case NoteType.Tap: EvaluateTap(inputLane); break;
             case NoteType.Multi: EvaluateMultiLane(inputLane); break;
-            case NoteType.Hold:  BeginHold(); break;
+            case NoteType.Hold: BeginHold(); break;
         }
     }
 
@@ -99,6 +99,14 @@ public class Judge : MonoBehaviour
         m_judgeOutcomeEvent.Invoke(outcome);
         Debug.Log("Tap: " + outcome);
         m_noteSpawner.HitLane(m_currentGoal.absoluteBeatIndex, lane);
+        m_composer.AdvanceGoal();
+    }
+
+    public void RegisterSlashHit()
+    {
+        InputOutcome outcome = GetTimingOutcome();
+        m_judgeOutcomeEvent.Invoke(outcome);
+        m_hasGoalBeenHit = true;
         m_composer.AdvanceGoal();
     }
 
@@ -188,8 +196,8 @@ public class Judge : MonoBehaviour
         Debug.Log($"Now: {nowMs:0} | Target: {targetMs:0} | Delta: {deltaMs:0}");
 
         if (Mathf.Abs(deltaMs) <= m_perfectMs) return InputOutcome.Perfect;
-        if (Mathf.Abs(deltaMs) <= m_hitMs)     return InputOutcome.Hit;
-        if (Mathf.Abs(deltaMs) <= m_marginMs)  return deltaMs < 0 ? InputOutcome.Early : InputOutcome.Late;
+        if (Mathf.Abs(deltaMs) <= m_hitMs) return InputOutcome.Hit;
+        if (Mathf.Abs(deltaMs) <= m_marginMs) return deltaMs < 0 ? InputOutcome.Early : InputOutcome.Late;
         return InputOutcome.Miss;
     }
 
